@@ -1,24 +1,40 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request
 from twilio.twiml.messaging_response import MessagingResponse
 import requests
+import json
 import os
+from google.oauth2 import service_account
+import google.auth.transport.requests
 
 app = Flask(__name__)
 
-# ⚙️ Defina essas variáveis com seus dados reais do Dialogflow CX
-PROJECT_ID = "SEU_PROJECT_ID"
-LOCATION = "global"  # ou "us-central1"
-AGENT_ID = "SEU_AGENT_ID"
-SESSION_ID = "qualquer-session-id-unico"
+# Configurações do Dialogflow CX
+PROJECT_ID = "careful-alloy-433019-u1"
+LOCATION = "global"
+AGENT_ID = "3e7c7703-9ad7-4943-ab42-954363eda079"
+SESSION_ID = "sessao_381485_usuarioA"
 LANGUAGE_CODE = "pt-br"
-ACCESS_TOKEN = "SEU_TOKEN_DE_AUTORIZACAO_DIALOGFLOW"
+SERVICE_ACCOUNT_FILE = "careful-alloy-433019-u1-6f1afef2e46c.json"
+
+# Carrega as credenciais do arquivo JSON
+credentials = service_account.Credentials.from_service_account_file(
+    SERVICE_ACCOUNT_FILE, scopes=["https://www.googleapis.com/auth/cloud-platform"]
+)
+
+def generate_access_token():
+    request_auth = google.auth.transport.requests.Request()
+    credentials.refresh(request_auth)
+    return credentials.token
 
 def detect_intent_text(text, session_id=SESSION_ID):
+    access_token = generate_access_token()
     url = f"https://dialogflow.googleapis.com/v3/projects/{PROJECT_ID}/locations/{LOCATION}/agents/{AGENT_ID}/sessions/{session_id}:detectIntent"
+
     headers = {
-        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json"
     }
+
     payload = {
         "queryInput": {
             "text": {
@@ -27,6 +43,7 @@ def detect_intent_text(text, session_id=SESSION_ID):
             "languageCode": LANGUAGE_CODE
         }
     }
+
     response = requests.post(url, headers=headers, json=payload)
     return response.json()
 
@@ -39,16 +56,15 @@ def webhook():
         response.message("❗ Não entendi sua mensagem.")
         return str(response)
 
-    # Chama o Dialogflow CX
-    df_response = detect_intent_text(incoming_msg)
-
     try:
+        df_response = detect_intent_text(incoming_msg)
         msg = df_response["fulfillmentResponse"]["messages"][0]["text"]["text"][0]
     except Exception as e:
+        print(f"Erro: {e}")
         msg = "⚠️ Houve um erro ao processar sua mensagem."
 
     response.message(msg)
     return str(response)
 
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
