@@ -15,7 +15,7 @@ AGENT_ID = "3e7c7703-9ad7-4943-ab42-954363eda079"
 SESSION_ID = "sessao_381485_usuarioA"
 LANGUAGE_CODE = "pt-br"
 
-# Carrega as credenciais a partir da variável de ambiente JSON
+# Carrega as credenciais do JSON a partir da variável de ambiente
 service_account_info = json.loads(os.environ["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
 credentials = service_account.Credentials.from_service_account_info(
     service_account_info, scopes=["https://www.googleapis.com/auth/cloud-platform"]
