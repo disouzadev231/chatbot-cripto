@@ -58,7 +58,7 @@ def webhook():
 
     try:
         df_response = detect_intent_text(incoming_msg)
-        msg = df_response["fulfillmentResponse"]["messages"][0]["text"]["text"][0]
+        messages = df_response.get("fulfillmentResponse", {}).get("messages", [])
     except Exception as e:
         print(f"Erro: {e}")
         msg = "⚠️ Houve um erro ao processar sua mensagem."
