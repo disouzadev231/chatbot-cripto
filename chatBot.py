@@ -14,11 +14,11 @@ LOCATION = "global"
 AGENT_ID = "3e7c7703-9ad7-4943-ab42-954363eda079"
 SESSION_ID = "sessao_381485_usuarioA"
 LANGUAGE_CODE = "pt-br"
-SERVICE_ACCOUNT_FILE = "careful-alloy-433019-u1-6f1afef2e46c.json"
 
-# Carrega as credenciais do arquivo JSON
-credentials = service_account.Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE, scopes=["https://www.googleapis.com/auth/cloud-platform"]
+# Carrega as credenciais a partir da variável de ambiente JSON
+service_account_info = json.loads(os.environ["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
+credentials = service_account.Credentials.from_service_account_info(
+    service_account_info, scopes=["https://www.googleapis.com/auth/cloud-platform"]
 )
 
 def generate_access_token():
