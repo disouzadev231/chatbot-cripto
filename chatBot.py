@@ -45,7 +45,12 @@ def detect_intent_text(text, session_id=SESSION_ID):
     }
 
     response = requests.post(url, headers=headers, json=payload)
+
+    # Adicione esta linha para depuração
+    print("🧠 Dialogflow response:", json.dumps(response.json(), indent=2, ensure_ascii=False))
+
     return response.json()
+
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
