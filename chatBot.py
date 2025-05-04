@@ -1,75 +1,82 @@
-from flask import Flask, request
-from twilio.twiml.messaging_response import MessagingResponse
+from flask import Flask, request, jsonify
+from google.cloud import dialogflow_v2 as dialogflow
+import os
 import requests
 import json
-import os
-from google.oauth2 import service_account
-import google.auth.transport.requests
 
 app = Flask(__name__)
 
-# Configurações do Dialogflow CX
-PROJECT_ID = "careful-alloy-433019-u1"
-LOCATION = "global"
-AGENT_ID = "3e7c7703-9ad7-4943-ab42-954363eda079"
-SESSION_ID = "sessao_381485_usuarioA"
-LANGUAGE_CODE = "pt-br"
+# ------------------- CONFIGURAÇÕES -------------------
 
-# Carrega as credenciais do JSON a partir da variável de ambiente
-service_account_info = json.loads(os.environ["GOOGLE_APPLICATION_CREDENTIALS_JSON"])
-credentials = service_account.Credentials.from_service_account_info(
-    service_account_info, scopes=["https://www.googleapis.com/auth/cloud-platform"]
-)
+# Caminho da chave do Dialogflow
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "chatcriptomvp-sa.json"
 
-def generate_access_token():
-    request_auth = google.auth.transport.requests.Request()
-    credentials.refresh(request_auth)
-    return credentials.token
+# Dados da Twilio
+TWILIO_ACCOUNT_SID = "SEU_ACCOUNT_SID"
+TWILIO_AUTH_TOKEN = "SEU_AUTH_TOKEN"
+TWILIO_WHATSAPP_NUMBER = "whatsapp:+14155238886"
 
-def detect_intent_text(text, session_id=SESSION_ID):
-    access_token = generate_access_token()
-    url = f"https://dialogflow.googleapis.com/v3/projects/{PROJECT_ID}/locations/{LOCATION}/agents/{AGENT_ID}/sessions/{session_id}:detectIntent"
+# ------------------- DIALOGFLOW ----------------------
 
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
-    }
+def detect_intent_text(msg, session_id="sessao_123", language_code="pt-BR"):
+    client = dialogflow.SessionsClient()
+    session = client.session_path("careful-alloy-433019-u1", session_id)
+
+    text_input = dialogflow.TextInput(text=msg, language_code=language_code)
+    query_input = dialogflow.QueryInput(text=text_input)
+
+    response = client.detect_intent(request={"session": session, "query_input": query_input})
+    return response
+
+# ------------------- ENVIO TWILIO --------------------
+
+def send_message(to, message):
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json"
+    auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
     payload = {
-        "queryInput": {
-            "text": {
-                "text": text
-            },
-            "languageCode": LANGUAGE_CODE
-        }
+        "To": to,
+        "From": TWILIO_WHATSAPP_NUMBER,
+        "Body": message
     }
 
-    response = requests.post(url, headers=headers, json=payload)
+    response = requests.post(url, data=payload, auth=auth)
+    print("📤 Enviado para Twilio:", response.status_code, response.text)
 
-    # Adicione esta linha para depuração
-    print("🧠 Dialogflow response:", json.dumps(response.json(), indent=2, ensure_ascii=False))
-
-    return response.json()
-
+# ------------------- WEBHOOK -------------------------
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    incoming_msg = request.values.get('Body', '').strip()
-    response = MessagingResponse()
-
-    if not incoming_msg:
-        response.message("❗ Não entendi sua mensagem.")
-        return str(response)
+    data = request.form
+    print("📩 Mensagem recebida:", json.dumps(data.to_dict(), indent=2))
 
     try:
-        df_response = detect_intent_text(incoming_msg)
-        messages = df_response.get("fulfillmentResponse", {}).get("messages", [])
-    except Exception as e:
-        print(f"Erro: {e}")
-        msg = "⚠️ Houve um erro ao processar sua mensagem."
+        msg = data.get("Body")
+        sender = data.get("From")
 
-    response.message(msg)
-    return str(response)
+        df_response = detect_intent_text(msg)
+        reply = "Desculpe, não entendi sua pergunta."
+
+        # Tenta extrair a resposta
+        for m in df_response.query_result.response_messages:
+            if m.text and m.text.text:
+                reply = m.text.text[0]
+                break
+
+        send_message(sender, reply)
+        return jsonify({"status": "success"}), 200
+
+    except Exception as e:
+        print("❌ Erro:", e)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# ------------------- RAIZ ----------------------------
+
+@app.route("/", methods=["GET"])
+def home():
+    return "Chatbot Cripto ativo!", 200
+
+# ------------------- MAIN ----------------------------
 
 if __name__ == "__main__":
     app.run(debug=True)
