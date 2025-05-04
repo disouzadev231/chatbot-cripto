@@ -27,15 +27,39 @@ TWILIO_WHATSAPP_NUMBER = "whatsapp:+14155238886"
 
 # ------------------- DIALOGFLOW ----------------------
 
-def detect_intent_text(msg, session_id="sessao_123", language_code="pt-BR"):
-    client = dialogflow.SessionsClient()
-    session = client.session_path("careful-alloy-433019", session_id)
+from google.cloud import dialogflowcx_v3beta1 as dialogflowcx
 
-    text_input = dialogflow.TextInput(text=msg, language_code=language_code)
-    query_input = dialogflow.QueryInput(text=text_input)
+def detect_intent_text(
+    msg,
+    session_id="sessao_123",
+    project_id="careful-alloy-433019",
+    agent_id="3e7c7703-9ad7-4943-ab42-954363eda079",
+    location="us-central1",
+    language_code="pt-BR"
+):
+    client = dialogflowcx.SessionsClient()
 
-    response = client.detect_intent(request={"session": session, "query_input": query_input})
-    return response
+    # Formata o caminho da sessão corretamente para CX
+    session_path = client.session_path(
+        project=project_id,
+        location=location,
+        agent=agent_id,
+        session=session_id
+    )
+
+    text_input = dialogflowcx.TextInput(text=msg)
+    query_input = dialogflowcx.QueryInput(
+        text=text_input,
+        language_code=language_code
+    )
+
+    request = dialogflowcx.DetectIntentRequest(
+        session=session_path,
+        query_input=query_input
+    )
+
+    response = client.detect_intent(request=request)
+    return response.query_result.response_messages
 
 # ------------------- ENVIO TWILIO --------------------
 
