@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from google.cloud import dialogflow_v2 as dialogflow
+from google.cloud import dialogflowcx_v3beta1 as dialogflowcx
 import os
 import base64
 import requests
