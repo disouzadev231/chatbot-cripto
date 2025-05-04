@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from google.cloud import dialogflow_v2 as dialogflow
 import os
+import base64
 import requests
 import json
 
@@ -8,8 +9,16 @@ app = Flask(__name__)
 
 # ------------------- CONFIGURAÇÕES -------------------
 
-# Caminho da chave do Dialogflow
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "chatcriptomvp-sa.json"
+# Decodifica a chave do Dialogflow de uma variável de ambiente base64
+key_base64 = os.environ.get("GOOGLE_CREDENTIALS_BASE64")
+key_path = "keyfile.json"
+
+if key_base64:
+    with open(key_path, "wb") as f:
+        f.write(base64.b64decode(key_base64))
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_path
+else:
+    raise Exception("Variável de ambiente GOOGLE_CREDENTIALS_BASE64 não está definida.")
 
 # Dados da Twilio
 TWILIO_ACCOUNT_SID = "SEU_ACCOUNT_SID"
@@ -57,7 +66,6 @@ def webhook():
         df_response = detect_intent_text(msg)
         reply = "Desculpe, não entendi sua pergunta."
 
-        # Tenta extrair a resposta
         for m in df_response.query_result.response_messages:
             if m.text and m.text.text:
                 reply = m.text.text[0]
