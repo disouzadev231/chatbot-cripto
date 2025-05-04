@@ -29,7 +29,7 @@ TWILIO_WHATSAPP_NUMBER = "whatsapp:+14155238886"
 
 def detect_intent_text(msg, session_id="sessao_123", language_code="pt-BR"):
     client = dialogflow.SessionsClient()
-    session = client.session_path("careful-alloy-433019-u1", session_id)
+    session = client.session_path("careful-alloy-433019", session_id)
 
     text_input = dialogflow.TextInput(text=msg, language_code=language_code)
     query_input = dialogflow.QueryInput(text=text_input)
