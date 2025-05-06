@@ -90,10 +90,10 @@ def webhook():
         msg = data.get("Body")
         sender = data.get("From")
 
-        df_response = detect_intent_text(msg)
+        df_messages = detect_intent_text(msg)  # A função já retorna diretamente response_messages
         reply = "Desculpe, não entendi sua pergunta."
 
-        for m in df_response.query_result.response_messages:
+        for m in df_messages:
             if m.text and m.text.text:
                 reply = m.text.text[0]
                 break
@@ -104,6 +104,7 @@ def webhook():
     except Exception as e:
         print("❌ Erro:", e)
         return jsonify({"status": "error", "message": str(e)}), 500
+
 
 # ------------------- RAIZ ----------------------------
 
