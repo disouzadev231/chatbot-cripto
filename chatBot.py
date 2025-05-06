@@ -35,10 +35,9 @@ def detect_intent_text(
     session_id="sessao_123",
     project_id="careful-alloy-433019",
     agent_id="8814b38a-995d-4bab-8290-5e51472f5650",
-    location="us-central1",
     language_code="pt-BR"
 ):
-    location = location.replace(" ", "").strip()  # 👈 remove espaços indesejados
+    location = "us-central1"  # 👈 
     print(f"🔍 Location recebido: '{location}'")  # 👈 debug
     client = dialogflowcx.SessionsClient()
 
