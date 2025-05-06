@@ -33,7 +33,7 @@ from google.cloud import dialogflowcx_v3beta1 as dialogflowcx
 def detect_intent_text(
     msg,
     session_id="sessao_123",
-    project_id="careful-alloy-433019",
+    project_id="careful-alloy-433019-u1",
     agent_id="8814b38a-995d-4bab-8290-5e51472f5650",
     language_code="pt-BR"
 ):
