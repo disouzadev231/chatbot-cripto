@@ -38,7 +38,8 @@ def detect_intent_text(
     location="us-central1",  # ✅ Valor correto e fixo
     language_code="pt-BR"
 ):
-    location = "us-central1"  # 👈 
+        # 🔒 Garante que o valor de location esteja sem espaços
+    location = location.replace(" ", "").strip()
     print(f"🔍 Location recebido: '{location}'")  # 👈 debug
     client = dialogflowcx.SessionsClient()
 
