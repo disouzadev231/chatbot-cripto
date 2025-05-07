@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from google.cloud import dialogflow_v2 as dialogflow
 from google.cloud import dialogflowcx_v3beta1 as dialogflowcx
 from google.api_core.client_options import ClientOptions
+from google.auth import default
 import os
 import base64
 import requests
@@ -22,6 +23,10 @@ if key_base64:
 else:
     raise Exception("Variável de ambiente GOOGLE_CREDENTIALS_BASE64 não está definida.")
 
+# Verifica a conta de serviço ativa
+creds, _ = default()
+print(f"🔐 Conta de serviço ativa: {creds.service_account_email}")
+
 # Dados da Twilio
 TWILIO_ACCOUNT_SID = "SEU_ACCOUNT_SID"
 TWILIO_AUTH_TOKEN = "SEU_AUTH_TOKEN"
@@ -40,12 +45,12 @@ def detect_intent_text(
     location = location.replace(" ", "").strip()
     print(f"🔍 Location recebido: '{location}'")
 
-    # Define o endpoint regional para evitar erro 400
+    # Define o endpoint regional
     api_endpoint = f"{location}-dialogflow.googleapis.com"
     client_options = ClientOptions(api_endpoint=api_endpoint)
     client = dialogflowcx.SessionsClient(client_options=client_options)
 
-    # Define o caminho da sessão
+    # Caminho da sessão
     session_path = client.session_path(
         project=project_id,
         location=location,
@@ -65,7 +70,7 @@ def detect_intent_text(
         query_input=query_input
     )
 
-    # Executa e retorna a resposta
+    # Envia a requisição
     response = client.detect_intent(request=request)
     return response.query_result.response_messages
 
@@ -107,6 +112,8 @@ def webhook():
         return jsonify({"status": "success"}), 200
 
     except Exception as e:
+        if "403" in str(e):
+            print("🔒 Permissão negada: verifique se a conta de serviço tem acesso ao Dialogflow CX.")
         print("❌ Erro:", e)
         return jsonify({"status": "error", "message": str(e)}), 500
 
