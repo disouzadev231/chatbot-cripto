@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from google.cloud import dialogflow_v2 as dialogflow
 from google.cloud import dialogflowcx_v3beta1 as dialogflowcx
+from google.api_core.client_options import ClientOptions
 import os
 import base64
 import requests
@@ -26,24 +27,25 @@ TWILIO_ACCOUNT_SID = "SEU_ACCOUNT_SID"
 TWILIO_AUTH_TOKEN = "SEU_AUTH_TOKEN"
 TWILIO_WHATSAPP_NUMBER = "whatsapp:+14155238886"
 
-# ------------------- DIALOGFLOW ----------------------
-
-from google.cloud import dialogflowcx_v3beta1 as dialogflowcx
+# ------------------- DIALOGFLOW CX -------------------
 
 def detect_intent_text(
     msg,
     session_id="sessao_123",
-    project_id="careful-alloy-433019-u1",
+    project_id="careful-alloy-433019",
     agent_id="8814b38a-995d-4bab-8290-5e51472f5650",
-    location="us-central1",  # ✅ Valor correto e fixo
+    location="us-central1",
     language_code="pt-BR"
 ):
-        # 🔒 Garante que o valor de location esteja sem espaços
     location = location.replace(" ", "").strip()
-    print(f"🔍 Location recebido: '{location}'")  # 👈 debug
-    client = dialogflowcx.SessionsClient()
+    print(f"🔍 Location recebido: '{location}'")
 
-    # Formata o caminho da sessão corretamente para CX
+    # Define o endpoint regional para evitar erro 400
+    api_endpoint = f"{location}-dialogflow.googleapis.com"
+    client_options = ClientOptions(api_endpoint=api_endpoint)
+    client = dialogflowcx.SessionsClient(client_options=client_options)
+
+    # Define o caminho da sessão
     session_path = client.session_path(
         project=project_id,
         location=location,
@@ -51,6 +53,7 @@ def detect_intent_text(
         session=session_id
     )
 
+    # Monta a requisição
     text_input = dialogflowcx.TextInput(text=msg)
     query_input = dialogflowcx.QueryInput(
         text=text_input,
@@ -62,6 +65,7 @@ def detect_intent_text(
         query_input=query_input
     )
 
+    # Executa e retorna a resposta
     response = client.detect_intent(request=request)
     return response.query_result.response_messages
 
@@ -91,7 +95,7 @@ def webhook():
         msg = data.get("Body")
         sender = data.get("From")
 
-        df_messages = detect_intent_text(msg)  # A função já retorna diretamente response_messages
+        df_messages = detect_intent_text(msg)
         reply = "Desculpe, não entendi sua pergunta."
 
         for m in df_messages:
@@ -105,7 +109,6 @@ def webhook():
     except Exception as e:
         print("❌ Erro:", e)
         return jsonify({"status": "error", "message": str(e)}), 500
-
 
 # ------------------- RAIZ ----------------------------
 
