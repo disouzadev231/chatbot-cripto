@@ -92,26 +92,67 @@ def send_message(to, message):
 
 # ------------------- WEBHOOK -------------------------
 
+def get_bitcoin_price():
+    try:
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=brl"
+        response = requests.get(url)
+        data = response.json()
+        price = data["bitcoin"]["brl"]
+        return f"💰 O preço atual do Bitcoin é R$ {price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except Exception as e:
+        print("⚠️ Erro ao buscar preço do Bitcoin:", e)
+        return "❌ Erro ao buscar o preço do Bitcoin."
+
+def get_top_cryptos():
+    return (
+        "🏆 Top criptomoedas hoje:\n"
+        "1️⃣ Bitcoin (BTC)\n"
+        "2️⃣ Ethereum (ETH)\n"
+        "3️⃣ Solana (SOL)"
+    )
+
+def explain_crypto():
+    return (
+        "🔍 Criptomoedas são moedas digitais descentralizadas que utilizam a tecnologia blockchain "
+        "para garantir segurança e transparência nas transações."
+    )
+
+def welcome_message():
+    return (
+        "👋 Olá! Bem-vindo ao ChatCriptoMVP.\n"
+        "Você pode me perguntar sobre o preço do Bitcoin, criptos em destaque ou o que é blockchain!"
+    )
+
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    data = request.form or request.get_json() or {}
-    print("📩 Mensagem recebida:", json.dumps(data, indent=2))
+    data = request.form
+    print("📩 Mensagem recebida:", json.dumps(data.to_dict(), indent=2))
 
     try:
         msg = data.get("Body")
         sender = data.get("From")
 
-        if not msg or not sender:
-            print("⚠️ Ignorado: Requisição sem dados do WhatsApp.")
-            return jsonify({"status": "ignored", "message": "Requisição sem dados do WhatsApp."}), 200
-
         df_messages = detect_intent_text(msg)
         reply = "Desculpe, não entendi sua pergunta."
 
+        tag = None
+
         for m in df_messages:
+            if m.payload:
+                tag = m.payload.get("fields", {}).get("tag", {}).get("stringValue", "")
             if m.text and m.text.text:
                 reply = m.text.text[0]
-                break
+
+        # Verifica a tag para resposta dinâmica
+        if tag == "ConsultarPrecoBitcoin":
+            reply = get_bitcoin_price()
+        elif tag == "ConsultarTopCriptos":
+            reply = get_top_cryptos()
+        elif tag == "ExplicarCriptomoeda":
+            reply = explain_crypto()
+        elif tag == "welcome_intent":
+            reply = welcome_message()
 
         send_message(sender, reply)
         return jsonify({"status": "success"}), 200
@@ -119,6 +160,7 @@ def webhook():
     except Exception as e:
         print("❌ Erro:", e)
         return jsonify({"status": "error", "message": str(e)}), 500
+
 
 # ------------------- RAIZ ----------------------------
 
