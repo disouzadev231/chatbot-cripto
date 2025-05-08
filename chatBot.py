@@ -97,6 +97,9 @@ def webhook():
     print("📩 Mensagem recebida:", json.dumps(data.to_dict(), indent=2))
 
     try:
+                # 🔍 Debug das variáveis de ambiente
+        print(f"🔐 SID usado: {TWILIO_ACCOUNT_SID}")
+        print(f"🔐 TOKEN usado: {TWILIO_AUTH_TOKEN[:4]}********")
         msg = data.get("Body")
         sender = data.get("From")
 
