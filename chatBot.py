@@ -94,15 +94,16 @@ def send_message(to, message):
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    data = request.form
-    print("📩 Mensagem recebida:", json.dumps(data.to_dict(), indent=2))
+    data = request.form or request.get_json() or {}
+    print("📩 Mensagem recebida:", json.dumps(data, indent=2))
 
     try:
-                # 🔍 Debug das variáveis de ambiente
-        print(f"🔐 SID usado: {TWILIO_ACCOUNT_SID}")
-        print(f"🔐 TOKEN usado: {TWILIO_AUTH_TOKEN[:4]}********")
         msg = data.get("Body")
         sender = data.get("From")
+
+        if not msg or not sender:
+            print("⚠️ Ignorado: Requisição sem dados do WhatsApp.")
+            return jsonify({"status": "ignored", "message": "Requisição sem dados do WhatsApp."}), 200
 
         df_messages = detect_intent_text(msg)
         reply = "Desculpe, não entendi sua pergunta."
@@ -116,8 +117,6 @@ def webhook():
         return jsonify({"status": "success"}), 200
 
     except Exception as e:
-        if "403" in str(e):
-            print("🔒 Permissão negada: verifique se a conta de serviço tem acesso ao Dialogflow CX.")
         print("❌ Erro:", e)
         return jsonify({"status": "error", "message": str(e)}), 500
 
