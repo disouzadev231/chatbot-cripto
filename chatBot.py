@@ -28,8 +28,9 @@ creds, _ = default()
 print(f"🔐 Conta de serviço ativa: {creds.service_account_email}")
 
 # Dados da Twilio
-TWILIO_ACCOUNT_SID = "SEU_ACCOUNT_SID"
-TWILIO_AUTH_TOKEN = "SEU_AUTH_TOKEN"
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+
 TWILIO_WHATSAPP_NUMBER = "whatsapp:+14155238886"
 
 # ------------------- DIALOGFLOW CX -------------------
