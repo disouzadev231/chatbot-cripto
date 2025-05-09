@@ -148,42 +148,48 @@ def welcome_message():
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    data = request.form
-    print("📩 Mensagem recebida:", json.dumps(data.to_dict(), indent=2))
+    # Verifica se é requisição do WhatsApp ou Dialogflow
+    if request.form and request.form.get("From"):
+        # WhatsApp / Twilio
+        data = request.form
+        print("📩 Mensagem recebida:", json.dumps(data.to_dict(), indent=2))
 
-    try:
-        msg = data.get("Body")
-        sender = data.get("From")
+        try:
+            msg = data.get("Body")
+            sender = data.get("From")
 
-        # Executa o Dialogflow CX
-        df_messages = detect_intent_text(msg)
-        reply = "Desculpe, não entendi sua pergunta."
-        tag = ""
+            df_messages = detect_intent_text(msg)
+            reply = "Desculpe, não entendi sua pergunta."
 
-        for m in df_messages:
-            # Verifica se existe payload com a tag
-            if m.payload:
-                tag = m.payload.get("fields", {}).get("tag", {}).get("stringValue", "").strip()
-            # Caso haja texto simples, captura
-            if m.text and m.text.text:
-                reply = m.text.text[0]
+            tag = None
 
-        # Respostas dinâmicas conforme a tag
-        if tag == "ConsultarPrecoBitcoin":
-            reply = get_bitcoin_price()
-        elif tag == "ConsultarTopCriptos":
-            reply = get_top_cryptos()
-        elif tag == "ExplicarCriptomoeda":
-            reply = explain_crypto()
-        elif tag == "BoasVindas":
-            reply = welcome_message()
+            for m in df_messages:
+                if m.payload:
+                    tag = m.payload.get("fields", {}).get("tag", {}).get("stringValue", "")
+                if m.text and m.text.text:
+                    reply = m.text.text[0]
 
-        send_message(sender, reply)
-        return jsonify({"status": "success"}), 200
+            # Verifica a tag para resposta dinâmica
+            if tag == "ConsultarPrecoBitcoin":
+                reply = get_bitcoin_price()
+            elif tag == "ConsultarTopCriptos":
+                reply = get_top_cryptos()
+            elif tag == "ExplicarCriptomoeda":
+                reply = explain_crypto()
+            elif tag == "BoasVindas":
+                reply = welcome_message()
 
-    except Exception as e:
-        print("❌ Erro:", e)
-        return jsonify({"status": "error", "message": str(e)}), 500
+            send_message(sender, reply)
+            return jsonify({"status": "success"}), 200
+
+        except Exception as e:
+            print("❌ Erro:", e)
+            return jsonify({"status": "error", "message": str(e)}), 500
+
+    else:
+        # Fulfillment direto do Dialogflow (sem dados de WhatsApp)
+        print("⚠️ Ignorado: Requisição sem dados do WhatsApp.")
+        return jsonify({"status": "ignored", "message": "Requisição sem dados do WhatsApp."}), 200
 
 
 # ------------------- RAIZ ----------------------------
