@@ -92,6 +92,8 @@ def send_message(to, message):
 
 # ------------------- WEBHOOK -------------------------
 
+# ------------------- FUNÇÕES AUXILIARES -------------------
+
 def get_bitcoin_price():
     try:
         url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=brl"
@@ -104,12 +106,31 @@ def get_bitcoin_price():
         return "❌ Erro ao buscar o preço do Bitcoin."
 
 def get_top_cryptos():
-    return (
-        "🏆 Top criptomoedas hoje:\n"
-        "1️⃣ Bitcoin (BTC)\n"
-        "2️⃣ Ethereum (ETH)\n"
-        "3️⃣ Solana (SOL)"
-    )
+    try:
+        url = "https://api.coingecko.com/api/v3/coins/markets"
+        params = {
+            "vs_currency": "brl",
+            "order": "market_cap_desc",
+            "per_page": 3,
+            "page": 1,
+            "sparkline": False
+        }
+        response = requests.get(url, params=params)
+        data = response.json()
+
+        reply_lines = ["🏆 Top criptomoedas hoje:"]
+        for i, coin in enumerate(data, start=1):
+            name = coin["name"]
+            symbol = coin["symbol"].upper()
+            price = f"R$ {coin['current_price']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            reply_lines.append(f"{i}️⃣ {name} ({symbol}) - {price}")
+
+        return "\n".join(reply_lines)
+
+    except Exception as e:
+        print("⚠️ Erro ao buscar top criptos:", e)
+        return "❌ Não foi possível obter as principais criptomoedas no momento."
+
 
 def explain_crypto():
     return (
@@ -123,6 +144,7 @@ def welcome_message():
         "Você pode me perguntar sobre o preço do Bitcoin, criptos em destaque ou o que é blockchain!"
     )
 
+# ------------------- WEBHOOK -------------------
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -133,21 +155,23 @@ def webhook():
         msg = data.get("Body")
         sender = data.get("From")
 
+        # Executa o Dialogflow CX
         df_messages = detect_intent_text(msg)
         reply = "Desculpe, não entendi sua pergunta."
-
-        tag = None
+        tag = ""
 
         for m in df_messages:
+            # Verifica se existe payload com a tag
             if m.payload:
-                tag = m.payload.get("fields", {}).get("tag", {}).get("stringValue", "")
+                tag = m.payload.get("fields", {}).get("tag", {}).get("stringValue", "").strip()
+            # Caso haja texto simples, captura
             if m.text and m.text.text:
                 reply = m.text.text[0]
 
-        # Verifica a tag para resposta dinâmica
+        # Respostas dinâmicas conforme a tag
         if tag == "ConsultarPrecoBitcoin":
             reply = get_bitcoin_price()
-        elif tag == " ConsultarTopCriptos":
+        elif tag == "ConsultarTopCriptos":
             reply = get_top_cryptos()
         elif tag == "ExplicarCriptomoeda":
             reply = explain_crypto()
