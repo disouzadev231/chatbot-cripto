@@ -164,9 +164,9 @@ def webhook():
             for m in df_messages:
                 if m.payload:
                     tag = m.payload.get("fields", {}).get("tag", {}).get("stringValue", "").strip()
+                    break  # tag encontrada, pode parar
 
-                if m.text and m.text.text:
-                    reply = m.text.text[0]
+
 
             # Tags para responder dinamicamente
             if tag == "ConsultarPrecoBitcoin":
