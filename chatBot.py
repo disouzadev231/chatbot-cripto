@@ -163,7 +163,8 @@ def webhook():
 
             for m in df_messages:
                 if m.payload:
-                    tag = m.payload.get("fields", {}).get("tag", {}).get("stringValue", "")
+                    tag = m.payload.get("fields", {}).get("tag", {}).get("stringValue", "").strip()
+
                 if m.text and m.text.text:
                     reply = m.text.text[0]
 
@@ -185,7 +186,8 @@ def webhook():
             data = request.get_json()
             print("📩 Requisição recebida do Dialogflow:", json.dumps(data, indent=2))
 
-            tag = data.get("fulfillmentInfo", {}).get("tag", "")
+            tag = data.get("fulfillmentInfo", {}).get("tag", "").strip()
+
             reply = "❓ Desculpe, não entendi."
 
             if tag == "ConsultarPrecoBitcoin":
