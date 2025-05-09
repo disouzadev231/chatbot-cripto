@@ -147,11 +147,11 @@ def webhook():
         # Verifica a tag para resposta dinâmica
         if tag == "ConsultarPrecoBitcoin":
             reply = get_bitcoin_price()
-        elif tag == "ConsultarTopCriptos":
+        elif tag == " ConsultarTopCriptos":
             reply = get_top_cryptos()
         elif tag == "ExplicarCriptomoeda":
             reply = explain_crypto()
-        elif tag == "welcome_intent":
+        elif tag == "BoasVindas":
             reply = welcome_message()
 
         send_message(sender, reply)
