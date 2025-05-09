@@ -148,19 +148,17 @@ def welcome_message():
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    # Verifica se é requisição do WhatsApp ou Dialogflow
-    if request.form and request.form.get("From"):
-        # WhatsApp / Twilio
-        data = request.form
-        print("📩 Mensagem recebida:", json.dumps(data.to_dict(), indent=2))
+    try:
+        # Se vier de Twilio (WhatsApp), os dados vêm em request.form
+        if request.form and request.form.get("Body") and request.form.get("From"):
+            data = request.form
+            print("📩 Mensagem recebida (WhatsApp):", json.dumps(data.to_dict(), indent=2))
 
-        try:
             msg = data.get("Body")
             sender = data.get("From")
 
             df_messages = detect_intent_text(msg)
             reply = "Desculpe, não entendi sua pergunta."
-
             tag = None
 
             for m in df_messages:
@@ -169,7 +167,7 @@ def webhook():
                 if m.text and m.text.text:
                     reply = m.text.text[0]
 
-            # Verifica a tag para resposta dinâmica
+            # Tags para responder dinamicamente
             if tag == "ConsultarPrecoBitcoin":
                 reply = get_bitcoin_price()
             elif tag == "ConsultarTopCriptos":
@@ -182,14 +180,35 @@ def webhook():
             send_message(sender, reply)
             return jsonify({"status": "success"}), 200
 
-        except Exception as e:
-            print("❌ Erro:", e)
-            return jsonify({"status": "error", "message": str(e)}), 500
+        else:
+            # Caso o Dialogflow CX acione diretamente o webhook (via fulfillment)
+            data = request.get_json()
+            print("📩 Requisição recebida do Dialogflow:", json.dumps(data, indent=2))
 
-    else:
-        # Fulfillment direto do Dialogflow (sem dados de WhatsApp)
-        print("⚠️ Ignorado: Requisição sem dados do WhatsApp.")
-        return jsonify({"status": "ignored", "message": "Requisição sem dados do WhatsApp."}), 200
+            tag = data.get("fulfillmentInfo", {}).get("tag", "")
+            reply = "❓ Desculpe, não entendi."
+
+            if tag == "ConsultarPrecoBitcoin":
+                reply = get_bitcoin_price()
+            elif tag == "ConsultarTopCriptos":
+                reply = get_top_cryptos()
+            elif tag == "ExplicarCriptomoeda":
+                reply = explain_crypto()
+            elif tag == "BoasVindas":
+                reply = welcome_message()
+
+            return jsonify({
+                "fulfillment_response": {
+                    "messages": [{
+                        "text": {"text": [reply]}
+                    }]
+                }
+            })
+
+    except Exception as e:
+        print("❌ Erro:", e)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 
 
 # ------------------- RAIZ ----------------------------
