@@ -144,27 +144,15 @@ def webhook():
             msg = data.get("Body")
             sender = data.get("From")
 
-            result = detect_intent_text(msg)
-            result_json = dialogflowcx.DetectIntentResponse.to_json(result._pb)
-            result_dict = json.loads(result_json)
-            tag = result_dict.get("queryResult", {}).get("fulfillmentInfo", {}).get("tag", "").strip()
+            # Processa a mensagem em segundo plano
+            threading.Thread(target=process_request, args=(msg, sender)).start()
 
-            print(f"🔖 Tag recebida: '{tag}'")
-
-            if tag == "ConsultarPrecoBitcoin":
-                reply = get_bitcoin_price()
-            elif tag == "ConsultarTopCriptos":
-                reply = get_top_cryptos()
-            elif tag == "ExplicarCriptomoeda":
-                reply = explain_crypto()
-            elif tag == "BoasVindas":
-                reply = welcome_message()
-            else:
-                reply = "Desculpe, não entendi sua pergunta."
-
-            # ✅ Retorna para o Dialogflow rapidamente
-            threading.Thread(target=send_message, args=(sender, reply)).start()
-            return jsonify({"status": "success"}), 200
+            # Resposta rápida ao Dialogflow
+            return jsonify({
+                "fulfillment_response": {
+                    "messages": [{"text": {"text": ["Processando sua solicitação..."]}}]
+                }
+            }), 200
 
         else:
             data = request.get_json()
@@ -173,26 +161,50 @@ def webhook():
             tag = data.get("fulfillmentInfo", {}).get("tag", "").strip()
             print(f"🔖 Tag recebida (direto): '{tag}'")
 
-            if tag == "ConsultarPrecoBitcoin":
-                reply = get_bitcoin_price()
-            elif tag == "ConsultarTopCriptos":
-                reply = get_top_cryptos()
-            elif tag == "ExplicarCriptomoeda":
-                reply = explain_crypto()
-            elif tag == "BoasVindas":
-                reply = welcome_message()
-            else:
-                reply = "❓ Desculpe, não entendi."
+            # Processa a mensagem em segundo plano
+            threading.Thread(target=process_request, args=(tag, None)).start()
 
+            # Resposta rápida ao Dialogflow
             return jsonify({
                 "fulfillment_response": {
-                    "messages": [{"text": {"text": [reply]}}]
+                    "messages": [{"text": {"text": ["Processando sua solicitação..."]}}]
                 }
-            })
+            }), 200
 
     except Exception as e:
         print("❌ Erro:", e)
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+def process_request(msg, sender):
+    """
+    Processa a mensagem recebida e executa a lógica correspondente.
+    """
+    try:
+        result = detect_intent_text(msg)
+        result_json = dialogflowcx.DetectIntentResponse.to_json(result._pb)
+        result_dict = json.loads(result_json)
+        tag = result_dict.get("queryResult", {}).get("fulfillmentInfo", {}).get("tag", "").strip()
+
+        print(f"🔖 Tag processada: '{tag}'")
+
+        if tag == "ConsultarPrecoBitcoin":
+            reply = get_bitcoin_price()
+        elif tag == "ConsultarTopCriptos":
+            reply = get_top_cryptos()
+        elif tag == "ExplicarCriptomoeda":
+            reply = explain_crypto()
+        elif tag == "BoasVindas":
+            reply = welcome_message()
+        else:
+            reply = "Desculpe, não entendi sua pergunta."
+
+        # Envia a mensagem para o Twilio, se o remetente for fornecido
+        if sender:
+            send_message(sender, reply)
+
+    except Exception as e:
+        print("❌ Erro ao processar a solicitação:", e)
 
 # ------------------- RAIZ ----------------------------
 
