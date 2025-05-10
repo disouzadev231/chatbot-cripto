@@ -1,13 +1,12 @@
 from flask import Flask, request, jsonify
-from google.cloud import dialogflow_v2 as dialogflow
 from google.cloud import dialogflowcx_v3beta1 as dialogflowcx
 from google.api_core.client_options import ClientOptions
-from google.auth import default
 import os
 import base64
 import requests
 import json
-import threading
+import asyncio
+import aiohttp
 
 app = Flask(__name__)
 
@@ -23,33 +22,22 @@ if key_base64:
 else:
     raise Exception("Variável GOOGLE_CREDENTIALS_BASE64 não está definida.")
 
-# Conta ativa
-creds, _ = default()
-print(f"🔐 Conta de serviço ativa: {creds.service_account_email}")
-
 # Twilio
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP_NUMBER = "whatsapp:+14155238886"
 
+# Reutilizar o cliente do Dialogflow
+location = "us-central1"
+api_endpoint = f"{location}-dialogflow.googleapis.com"
+client_options = ClientOptions(api_endpoint=api_endpoint)
+dialogflow_client = dialogflowcx.SessionsClient(client_options=client_options)
+
 # ------------------- DIALOGFLOW CX -------------------
 
-def detect_intent_text(
-    msg,
-    session_id="sessao_123",
-    project_id="careful-alloy-433019-u1",
-    agent_id="8814b38a-995d-4bab-8290-5e51472f5650",
-    location="us-central1",
-    language_code="pt-BR"
-):
-    location = location.replace(" ", "").strip()
-    print(f"🔍 Location recebido: '{location}'")
-
-    api_endpoint = f"{location}-dialogflow.googleapis.com"
-    client_options = ClientOptions(api_endpoint=api_endpoint)
-    client = dialogflowcx.SessionsClient(client_options=client_options)
-
-    session_path = client.session_path(
+async def detect_intent_text_async(msg, session_id="sessao_123", project_id="careful-alloy-433019-u1",
+                                   agent_id="8814b38a-995d-4bab-8290-5e51472f5650", language_code="pt-BR"):
+    session_path = dialogflow_client.session_path(
         project=project_id,
         location=location,
         agent=agent_id,
@@ -67,23 +55,24 @@ def detect_intent_text(
         query_input=query_input
     )
 
-    response = client.detect_intent(request=request)
+    response = dialogflow_client.detect_intent(request=request)
     return response.query_result
 
 # ------------------- FUNÇÕES AUXILIARES -------------------
 
-def get_bitcoin_price():
+async def get_bitcoin_price():
     try:
         url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=brl"
-        response = requests.get(url)
-        data = response.json()
-        price = data["bitcoin"]["brl"]
-        return f"\U0001F4B0 O preço atual do Bitcoin é R$ {price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                data = await response.json()
+                price = data["bitcoin"]["brl"]
+                return f"\U0001F4B0 O preço atual do Bitcoin é R$ {price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except Exception as e:
         print("⚠️ Erro ao buscar preço do Bitcoin:", e)
         return "❌ Erro ao buscar o preço do Bitcoin."
 
-def get_top_cryptos():
+async def get_top_cryptos():
     try:
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params = {
@@ -93,38 +82,25 @@ def get_top_cryptos():
             "page": 1,
             "sparkline": False
         }
-        response = requests.get(url, params=params)
-        data = response.json()
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params) as response:
+                data = await response.json()
 
-        reply_lines = ["\U0001F3C6 Top criptomoedas hoje:"]
-        for i, coin in enumerate(data, start=1):
-            name = coin["name"]
-            symbol = coin["symbol"].upper()
-            price = f"R$ {coin['current_price']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            reply_lines.append(f"{i}⃣ {name} ({symbol}) - {price}")
+                reply_lines = ["\U0001F3C6 Top criptomoedas hoje:"]
+                for i, coin in enumerate(data, start=1):
+                    name = coin["name"]
+                    symbol = coin["symbol"].upper()
+                    price = f"R$ {coin['current_price']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                    reply_lines.append(f"{i}⃣ {name} ({symbol}) - {price}")
 
-        return "\n".join(reply_lines)
+                return "\n".join(reply_lines)
     except Exception as e:
         print("⚠️ Erro ao buscar top criptos:", e)
         return "❌ Não foi possível obter as principais criptomoedas no momento."
 
-def explain_crypto():
-    return (
-        "\U0001F50D Criptomoedas são moedas digitais descentralizadas que utilizam a tecnologia blockchain "
-        "para garantir segurança e transparência nas transações."
-    )
-
-def welcome_message():
-    return (
-        "\U0001F44B Olá! Bem-vindo ao ChatCriptoMVP.\n"
-        "Você pode me perguntar sobre o preço do Bitcoin, criptos em destaque ou o que é blockchain!"
-    )
-
-# ------------------- ENVIO TWILIO --------------------
-
-def send_message(to, message):
+async def send_message(to, message):
     url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json"
-    auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+    auth = aiohttp.BasicAuth(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
     payload = {
         "To": to,
@@ -132,13 +108,22 @@ def send_message(to, message):
         "Body": message
     }
 
-    response = requests.post(url, data=payload, auth=auth)
-    print("\U0001F4E4 Enviado para Twilio:", response.status_code, response.text)
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, data=payload, auth=auth) as response:
+            print("\U0001F4E4 Enviado para Twilio:", response.status, await response.text())
+
+# Função para explicar o que é uma criptomoeda
+def explain_crypto():
+    return "Criptomoedas são moedas digitais descentralizadas baseadas em tecnologia blockchain."
+
+# Função para mensagem de boas-vindas
+def welcome_message():
+    return "Bem-vindo ao Chatbot Cripto! Como posso ajudar você hoje?"
 
 # ------------------- WEBHOOK -------------------------
 
 @app.route("/webhook", methods=["POST"])
-def webhook():
+async def webhook():
     try:
         if request.form and request.form.get("Body") and request.form.get("From"):
             data = request.form
@@ -147,32 +132,28 @@ def webhook():
             msg = data.get("Body")
             sender = data.get("From")
 
-            def process():
-                try:
-                    result = detect_intent_text(msg)
-                    result_json = dialogflowcx.DetectIntentResponse.to_json(result._pb)
-                    result_dict = json.loads(result_json)
-                    tag = result_dict.get("queryResult", {}).get("fulfillmentInfo", {}).get("tag", "").strip()
+            try:
+                result = await detect_intent_text_async(msg)
+                tag = result.fulfillment_info.tag.strip()
 
-                    print(f"🔖 Tag recebida: '{tag}'")
+                print(f"🔖 Tag recebida: '{tag}'")
 
-                    if tag == "ConsultarPrecoBitcoin":
-                        reply = get_bitcoin_price()
-                    elif tag == "ConsultarTopCriptos":
-                        reply = get_top_cryptos()
-                    elif tag == "ExplicarCriptomoeda":
-                        reply = explain_crypto()
-                    elif tag == "BoasVindas":
-                        reply = welcome_message()
-                    else:
-                        reply = "Desculpe, não entendi sua pergunta."
+                if tag == "ConsultarPrecoBitcoin":
+                    reply = await get_bitcoin_price()
+                elif tag == "ConsultarTopCriptos":
+                    reply = await get_top_cryptos()
+                elif tag == "ExplicarCriptomoeda":
+                    reply = explain_crypto()
+                elif tag == "BoasVindas":
+                    reply = welcome_message()
+                else:
+                    reply = "Desculpe, não entendi sua pergunta."
 
-                    send_message(sender, reply)
+                await send_message(sender, reply)
 
-                except Exception as e:
-                    print("❌ Erro ao processar mensagem:", e)
+            except Exception as e:
+                print("❌ Erro ao processar mensagem:", e)
 
-            threading.Thread(target=process).start()
             return jsonify({"status": "accepted"}), 200
 
         else:
@@ -185,9 +166,9 @@ def webhook():
             reply = "❓ Desculpe, não entendi."
 
             if tag == "ConsultarPrecoBitcoin":
-                reply = get_bitcoin_price()
+                reply = await get_bitcoin_price()
             elif tag == "ConsultarTopCriptos":
-                reply = get_top_cryptos()
+                reply = await get_top_cryptos()
             elif tag == "ExplicarCriptomoeda":
                 reply = explain_crypto()
             elif tag == "BoasVindas":
@@ -212,4 +193,4 @@ def home():
 # ------------------- MAIN ----------------------------
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)
