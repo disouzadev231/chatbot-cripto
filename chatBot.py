@@ -149,7 +149,11 @@ def webhook():
             result = detect_intent_text(msg)
             reply = "Desculpe, não entendi sua pergunta."
 
-            tag = result.fulfillment_info.tag.strip() if result.fulfillment_info.tag else ""
+            # ✅ Correção: extrai tag do response como JSON
+            result_json = dialogflowcx.DetectIntentResponse.to_json(result._pb)
+            result_dict = json.loads(result_json)
+            tag = result_dict.get("queryResult", {}).get("fulfillmentInfo", {}).get("tag", "").strip()
+
             print(f"🔖 Tag recebida: '{tag}'")
 
             if tag == "ConsultarPrecoBitcoin":
@@ -191,6 +195,7 @@ def webhook():
     except Exception as e:
         print("❌ Erro:", e)
         return jsonify({"status": "error", "message": str(e)}), 500
+
 
 # ------------------- RAIZ ----------------------------
 
