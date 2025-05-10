@@ -7,6 +7,7 @@ import os
 import base64
 import requests
 import json
+import threading
 
 app = Flask(__name__)
 
@@ -77,7 +78,7 @@ def get_bitcoin_price():
         response = requests.get(url)
         data = response.json()
         price = data["bitcoin"]["brl"]
-        return f"💰 O preço atual do Bitcoin é R$ {price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        return f"\U0001F4B0 O preço atual do Bitcoin é R$ {price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except Exception as e:
         print("⚠️ Erro ao buscar preço do Bitcoin:", e)
         return "❌ Erro ao buscar o preço do Bitcoin."
@@ -95,12 +96,12 @@ def get_top_cryptos():
         response = requests.get(url, params=params)
         data = response.json()
 
-        reply_lines = ["🏆 Top criptomoedas hoje:"]
+        reply_lines = ["\U0001F3C6 Top criptomoedas hoje:"]
         for i, coin in enumerate(data, start=1):
             name = coin["name"]
             symbol = coin["symbol"].upper()
             price = f"R$ {coin['current_price']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            reply_lines.append(f"{i}️⃣ {name} ({symbol}) - {price}")
+            reply_lines.append(f"{i}⃣ {name} ({symbol}) - {price}")
 
         return "\n".join(reply_lines)
     except Exception as e:
@@ -109,13 +110,13 @@ def get_top_cryptos():
 
 def explain_crypto():
     return (
-        "🔍 Criptomoedas são moedas digitais descentralizadas que utilizam a tecnologia blockchain "
+        "\U0001F50D Criptomoedas são moedas digitais descentralizadas que utilizam a tecnologia blockchain "
         "para garantir segurança e transparência nas transações."
     )
 
 def welcome_message():
     return (
-        "👋 Olá! Bem-vindo ao ChatCriptoMVP.\n"
+        "\U0001F44B Olá! Bem-vindo ao ChatCriptoMVP.\n"
         "Você pode me perguntar sobre o preço do Bitcoin, criptos em destaque ou o que é blockchain!"
     )
 
@@ -132,7 +133,7 @@ def send_message(to, message):
     }
 
     response = requests.post(url, data=payload, auth=auth)
-    print("📤 Enviado para Twilio:", response.status_code, response.text)
+    print("\U0001F4E4 Enviado para Twilio:", response.status_code, response.text)
 
 # ------------------- WEBHOOK -------------------------
 
@@ -146,37 +147,35 @@ def webhook():
             msg = data.get("Body")
             sender = data.get("From")
 
-            result = detect_intent_text(msg)
-            result_json = dialogflowcx.DetectIntentResponse.to_json(result._pb)
-            result_dict = json.loads(result_json)
-            tag = result_dict.get("queryResult", {}).get("fulfillmentInfo", {}).get("tag", "").strip()
+            def process():
+                try:
+                    result = detect_intent_text(msg)
+                    result_json = dialogflowcx.DetectIntentResponse.to_json(result._pb)
+                    result_dict = json.loads(result_json)
+                    tag = result_dict.get("queryResult", {}).get("fulfillmentInfo", {}).get("tag", "").strip()
 
-            print(f"🔖 Tag recebida: '{tag}'")
+                    print(f"🔖 Tag recebida: '{tag}'")
 
-            if tag == "ConsultarPrecoBitcoin":
-                reply = get_bitcoin_price()
-            elif tag == "ConsultarTopCriptos":
-                reply = get_top_cryptos()
-            elif tag == "ExplicarCriptomoeda":
-                reply = explain_crypto()
-            elif tag == "BoasVindas":
-                reply = welcome_message()
-            else:
-                reply = "Desculpe, não entendi sua pergunta."
+                    if tag == "ConsultarPrecoBitcoin":
+                        reply = get_bitcoin_price()
+                    elif tag == "ConsultarTopCriptos":
+                        reply = get_top_cryptos()
+                    elif tag == "ExplicarCriptomoeda":
+                        reply = explain_crypto()
+                    elif tag == "BoasVindas":
+                        reply = welcome_message()
+                    else:
+                        reply = "Desculpe, não entendi sua pergunta."
 
-            # ✅ Retorna ao Dialogflow imediatamente
-            response_payload = jsonify({"status": "success"}), 200
+                    send_message(sender, reply)
 
-            # ✅ Dispara a mensagem fora do ciclo do Dialogflow
-            try:
-                send_message(sender, reply)
-            except Exception as e:
-                print("⚠️ Erro ao enviar mensagem via Twilio:", e)
+                except Exception as e:
+                    print("❌ Erro ao processar mensagem:", e)
 
-            return response_payload
+            threading.Thread(target=process).start()
+            return jsonify({"status": "accepted"}), 200
 
         else:
-            # Fulfillment direto do Dialogflow
             data = request.get_json()
             print("📩 Requisição recebida do Dialogflow:", json.dumps(data, indent=2))
 
@@ -203,8 +202,6 @@ def webhook():
     except Exception as e:
         print("❌ Erro:", e)
         return jsonify({"status": "error", "message": str(e)}), 500
-
-
 
 # ------------------- RAIZ ----------------------------
 
