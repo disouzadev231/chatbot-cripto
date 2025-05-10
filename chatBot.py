@@ -12,7 +12,6 @@ app = Flask(__name__)
 
 # ------------------- CONFIGURAÇÕES -------------------
 
-# Decodifica a chave do Dialogflow de uma variável de ambiente base64
 key_base64 = os.environ.get("GOOGLE_CREDENTIALS_BASE64")
 key_path = "keyfile.json"
 
@@ -21,16 +20,15 @@ if key_base64:
         f.write(base64.b64decode(key_base64))
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_path
 else:
-    raise Exception("Variável de ambiente GOOGLE_CREDENTIALS_BASE64 não está definida.")
+    raise Exception("Variável GOOGLE_CREDENTIALS_BASE64 não está definida.")
 
-# Verifica a conta de serviço ativa
+# Conta ativa
 creds, _ = default()
 print(f"🔐 Conta de serviço ativa: {creds.service_account_email}")
 
-# Dados da Twilio
+# Twilio
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
-
 TWILIO_WHATSAPP_NUMBER = "whatsapp:+14155238886"
 
 # ------------------- DIALOGFLOW CX -------------------
@@ -46,12 +44,10 @@ def detect_intent_text(
     location = location.replace(" ", "").strip()
     print(f"🔍 Location recebido: '{location}'")
 
-    # Define o endpoint regional
     api_endpoint = f"{location}-dialogflow.googleapis.com"
     client_options = ClientOptions(api_endpoint=api_endpoint)
     client = dialogflowcx.SessionsClient(client_options=client_options)
 
-    # Caminho da sessão
     session_path = client.session_path(
         project=project_id,
         location=location,
@@ -59,7 +55,6 @@ def detect_intent_text(
         session=session_id
     )
 
-    # Monta a requisição
     text_input = dialogflowcx.TextInput(text=msg)
     query_input = dialogflowcx.QueryInput(
         text=text_input,
@@ -71,26 +66,8 @@ def detect_intent_text(
         query_input=query_input
     )
 
-    # Envia a requisição
     response = client.detect_intent(request=request)
-    return response.query_result.response_messages
-
-# ------------------- ENVIO TWILIO --------------------
-
-def send_message(to, message):
-    url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json"
-    auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-
-    payload = {
-        "To": to,
-        "From": TWILIO_WHATSAPP_NUMBER,
-        "Body": message
-    }
-
-    response = requests.post(url, data=payload, auth=auth)
-    print("📤 Enviado para Twilio:", response.status_code, response.text)
-
-# ------------------- WEBHOOK -------------------------
+    return response.query_result
 
 # ------------------- FUNÇÕES AUXILIARES -------------------
 
@@ -126,11 +103,9 @@ def get_top_cryptos():
             reply_lines.append(f"{i}️⃣ {name} ({symbol}) - {price}")
 
         return "\n".join(reply_lines)
-
     except Exception as e:
         print("⚠️ Erro ao buscar top criptos:", e)
         return "❌ Não foi possível obter as principais criptomoedas no momento."
-
 
 def explain_crypto():
     return (
@@ -144,12 +119,26 @@ def welcome_message():
         "Você pode me perguntar sobre o preço do Bitcoin, criptos em destaque ou o que é blockchain!"
     )
 
-# ------------------- WEBHOOK -------------------
+# ------------------- ENVIO TWILIO --------------------
+
+def send_message(to, message):
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json"
+    auth = (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
+    payload = {
+        "To": to,
+        "From": TWILIO_WHATSAPP_NUMBER,
+        "Body": message
+    }
+
+    response = requests.post(url, data=payload, auth=auth)
+    print("📤 Enviado para Twilio:", response.status_code, response.text)
+
+# ------------------- WEBHOOK -------------------------
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
     try:
-        # Se vier de Twilio (WhatsApp), os dados vêm em request.form
         if request.form and request.form.get("Body") and request.form.get("From"):
             data = request.form
             print("📩 Mensagem recebida (WhatsApp):", json.dumps(data.to_dict(), indent=2))
@@ -157,19 +146,12 @@ def webhook():
             msg = data.get("Body")
             sender = data.get("From")
 
-            df_messages = detect_intent_text(msg)
+            result = detect_intent_text(msg)
             reply = "Desculpe, não entendi sua pergunta."
-            tag = None
 
-            for m in df_messages:
-                if m.payload:
-                    tag = m.payload.get("fields", {}).get("tag", {}).get("stringValue", "").strip()
-                    if m.text and m.text.text and not tag:
-                        reply = m.text.text[0]
+            tag = result.fulfillment_info.tag.strip() if result.fulfillment_info.tag else ""
+            print(f"🔖 Tag recebida: '{tag}'")
 
-
-
-            # Tags para responder dinamicamente
             if tag == "ConsultarPrecoBitcoin":
                 reply = get_bitcoin_price()
             elif tag == "ConsultarTopCriptos":
@@ -183,11 +165,11 @@ def webhook():
             return jsonify({"status": "success"}), 200
 
         else:
-            # Caso o Dialogflow CX acione diretamente o webhook (via fulfillment)
             data = request.get_json()
             print("📩 Requisição recebida do Dialogflow:", json.dumps(data, indent=2))
 
             tag = data.get("fulfillmentInfo", {}).get("tag", "").strip()
+            print(f"🔖 Tag recebida (direto): '{tag}'")
 
             reply = "❓ Desculpe, não entendi."
 
@@ -202,17 +184,13 @@ def webhook():
 
             return jsonify({
                 "fulfillment_response": {
-                    "messages": [{
-                        "text": {"text": [reply]}
-                    }]
+                    "messages": [{"text": {"text": [reply]}}]
                 }
             })
 
     except Exception as e:
         print("❌ Erro:", e)
         return jsonify({"status": "error", "message": str(e)}), 500
-
-
 
 # ------------------- RAIZ ----------------------------
 
