@@ -147,9 +147,6 @@ def webhook():
             sender = data.get("From")
 
             result = detect_intent_text(msg)
-            reply = "Desculpe, não entendi sua pergunta."
-
-            # ✅ Correção: extrai tag do response como JSON
             result_json = dialogflowcx.DetectIntentResponse.to_json(result._pb)
             result_dict = json.loads(result_json)
             tag = result_dict.get("queryResult", {}).get("fulfillmentInfo", {}).get("tag", "").strip()
@@ -164,11 +161,22 @@ def webhook():
                 reply = explain_crypto()
             elif tag == "BoasVindas":
                 reply = welcome_message()
+            else:
+                reply = "Desculpe, não entendi sua pergunta."
 
-            send_message(sender, reply)
-            return jsonify({"status": "success"}), 200
+            # ✅ Retorna ao Dialogflow imediatamente
+            response_payload = jsonify({"status": "success"}), 200
+
+            # ✅ Dispara a mensagem fora do ciclo do Dialogflow
+            try:
+                send_message(sender, reply)
+            except Exception as e:
+                print("⚠️ Erro ao enviar mensagem via Twilio:", e)
+
+            return response_payload
 
         else:
+            # Fulfillment direto do Dialogflow
             data = request.get_json()
             print("📩 Requisição recebida do Dialogflow:", json.dumps(data, indent=2))
 
@@ -195,6 +203,7 @@ def webhook():
     except Exception as e:
         print("❌ Erro:", e)
         return jsonify({"status": "error", "message": str(e)}), 500
+
 
 
 # ------------------- RAIZ ----------------------------
