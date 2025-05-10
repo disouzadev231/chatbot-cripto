@@ -164,7 +164,8 @@ def webhook():
             for m in df_messages:
                 if m.payload:
                     tag = m.payload.get("fields", {}).get("tag", {}).get("stringValue", "").strip()
-                    break  # tag encontrada, pode parar
+                    if m.text and m.text.text and not tag:
+                        reply = m.text.text[0]
 
 
 
