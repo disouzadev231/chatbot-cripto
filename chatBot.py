@@ -3,10 +3,10 @@ from google.cloud import dialogflowcx_v3beta1 as dialogflowcx
 from google.api_core.client_options import ClientOptions
 import os
 import base64
+import requests
 import json
 import asyncio
 import aiohttp
-from cachetools import TTLCache
 
 app = Flask(__name__)
 
@@ -32,12 +32,6 @@ location = "us-central1"
 api_endpoint = f"{location}-dialogflow.googleapis.com"
 client_options = ClientOptions(api_endpoint=api_endpoint)
 dialogflow_client = dialogflowcx.SessionsClient(client_options=client_options)
-
-# Sessão HTTP global
-http_session = aiohttp.ClientSession()
-
-# Cache com tempo de vida de 60 segundos
-cache = TTLCache(maxsize=100, ttl=60)
 
 # ------------------- DIALOGFLOW CX -------------------
 
@@ -67,25 +61,18 @@ async def detect_intent_text_async(msg, session_id="sessao_123", project_id="car
 # ------------------- FUNÇÕES AUXILIARES -------------------
 
 async def get_bitcoin_price():
-    if "bitcoin_price" in cache:
-        return cache["bitcoin_price"]
-
     try:
         url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=brl"
-        async with http_session.get(url) as response:
-            data = await response.json()
-            price = data["bitcoin"]["brl"]
-            result = f"\U0001F4B0 O preço atual do Bitcoin é R$ {price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            cache["bitcoin_price"] = result
-            return result
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                data = await response.json()
+                price = data["bitcoin"]["brl"]
+                return f"\U0001F4B0 O preço atual do Bitcoin é R$ {price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except Exception as e:
         print("⚠️ Erro ao buscar preço do Bitcoin:", e)
         return "❌ Erro ao buscar o preço do Bitcoin."
 
 async def get_top_cryptos():
-    if "top_cryptos" in cache:
-        return cache["top_cryptos"]
-
     try:
         url = "https://api.coingecko.com/api/v3/coins/markets"
         params = {
@@ -95,19 +82,18 @@ async def get_top_cryptos():
             "page": 1,
             "sparkline": False
         }
-        async with http_session.get(url, params=params) as response:
-            data = await response.json()
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params) as response:
+                data = await response.json()
 
-            reply_lines = ["\U0001F3C6 Top criptomoedas hoje:"]
-            for i, coin in enumerate(data, start=1):
-                name = coin["name"]
-                symbol = coin["symbol"].upper()
-                price = f"R$ {coin['current_price']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                reply_lines.append(f"{i}⃣ {name} ({symbol}) - {price}")
+                reply_lines = ["\U0001F3C6 Top criptomoedas hoje:"]
+                for i, coin in enumerate(data, start=1):
+                    name = coin["name"]
+                    symbol = coin["symbol"].upper()
+                    price = f"R$ {coin['current_price']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                    reply_lines.append(f"{i}⃣ {name} ({symbol}) - {price}")
 
-            result = "\n".join(reply_lines)
-            cache["top_cryptos"] = result
-            return result
+                return "\n".join(reply_lines)
     except Exception as e:
         print("⚠️ Erro ao buscar top criptos:", e)
         return "❌ Não foi possível obter as principais criptomoedas no momento."
@@ -122,16 +108,9 @@ async def send_message(to, message):
         "Body": message
     }
 
-    async with http_session.post(url, data=payload, auth=auth) as response:
-        print("\U0001F4E4 Enviado para Twilio:", response.status, await response.text())
-
-# Função para explicar o que é uma criptomoeda
-def explain_crypto():
-    return "Criptomoedas são moedas digitais descentralizadas baseadas em tecnologia blockchain."
-
-# Função para mensagem de boas-vindas
-def welcome_message():
-    return "Bem-vindo ao Chatbot Cripto! Como posso ajudar você hoje?"
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, data=payload, auth=auth) as response:
+            print("\U0001F4E4 Enviado para Twilio:", response.status, await response.text())
 
 # ------------------- WEBHOOK -------------------------
 
