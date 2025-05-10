@@ -7,6 +7,9 @@ import base64
 import requests
 import json
 import threading
+import asyncio
+import aiohttp
+from cachetools import TTLCache
 
 app = Flask(__name__)
 
@@ -67,7 +70,18 @@ def detect_intent_text(
     response = client.detect_intent(request=request)
     return response.query_result
 
+async def detect_intent_text_async(msg, session_id="sessao_123", project_id="careful-alloy-433019-u1",
+                                   agent_id="8814b38a-995d-4bab-8290-5e51472f5650", language_code="pt-BR"):
+    # Implementação assíncrona para o Dialogflow
+    pass  # Substitua pela lógica assíncrona
+
 # ------------------- FUNÇÕES AUXILIARES -------------------
+
+# Sessão HTTP global
+http_session = aiohttp.ClientSession()
+
+# Cache com tempo de vida de 60 segundos
+cache = TTLCache(maxsize=100, ttl=60)
 
 def get_bitcoin_price():
     try:
@@ -76,6 +90,22 @@ def get_bitcoin_price():
         data = response.json()
         price = data["bitcoin"]["brl"]
         return f"💰 O preço atual do Bitcoin é R$ {price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except Exception as e:
+        print("⚠️ Erro ao buscar preço do Bitcoin:", e)
+        return "❌ Erro ao buscar o preço do Bitcoin."
+
+async def get_bitcoin_price_async():
+    if "bitcoin_price" in cache:
+        return cache["bitcoin_price"]
+
+    try:
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=brl"
+        async with http_session.get(url) as response:
+            data = await response.json()
+            price = data["bitcoin"]["brl"]
+            result = f"💰 O preço atual do Bitcoin é R$ {price:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            cache["bitcoin_price"] = result
+            return result
     except Exception as e:
         print("⚠️ Erro ao buscar preço do Bitcoin:", e)
         return "❌ Erro ao buscar o preço do Bitcoin."
@@ -101,6 +131,36 @@ def get_top_cryptos():
             reply_lines.append(f"{i}️⃣ {name} ({symbol}) - {price}")
 
         return "\n".join(reply_lines)
+    except Exception as e:
+        print("⚠️ Erro ao buscar top criptos:", e)
+        return "❌ Não foi possível obter as principais criptomoedas no momento."
+
+async def get_top_cryptos_async():
+    if "top_cryptos" in cache:
+        return cache["top_cryptos"]
+
+    try:
+        url = "https://api.coingecko.com/api/v3/coins/markets"
+        params = {
+            "vs_currency": "brl",
+            "order": "market_cap_desc",
+            "per_page": 3,
+            "page": 1,
+            "sparkline": False
+        }
+        async with http_session.get(url, params=params) as response:
+            data = await response.json()
+
+            reply_lines = ["🏆 Top criptomoedas hoje:"]
+            for i, coin in enumerate(data, start=1):
+                name = coin["name"]
+                symbol = coin["symbol"].upper()
+                price = f"R$ {coin['current_price']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                reply_lines.append(f"{i}️⃣ {name} ({symbol}) - {price}")
+
+            result = "\n".join(reply_lines)
+            cache["top_cryptos"] = result
+            return result
     except Exception as e:
         print("⚠️ Erro ao buscar top criptos:", e)
         return "❌ Não foi possível obter as principais criptomoedas no momento."
@@ -132,10 +192,23 @@ def send_message(to, message):
     response = requests.post(url, data=payload, auth=auth)
     print("📤 Enviado para Twilio:", response.status_code, response.text)
 
+async def send_message_async(to, message):
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json"
+    auth = aiohttp.BasicAuth(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
+    payload = {
+        "To": to,
+        "From": TWILIO_WHATSAPP_NUMBER,
+        "Body": message
+    }
+
+    async with http_session.post(url, data=payload, auth=auth) as response:
+        print("📤 Enviado para Twilio:", response.status, await response.text())
+
 # ------------------- WEBHOOK -------------------------
 
 @app.route("/webhook", methods=["POST"])
-def webhook():
+async def webhook():
     try:
         if request.form and request.form.get("Body") and request.form.get("From"):
             data = request.form
@@ -144,7 +217,7 @@ def webhook():
             msg = data.get("Body")
             sender = data.get("From")
 
-            result = detect_intent_text(msg)
+            result = await detect_intent_text_async(msg)
             result_json = dialogflowcx.DetectIntentResponse.to_json(result._pb)
             result_dict = json.loads(result_json)
             tag = result_dict.get("queryResult", {}).get("fulfillmentInfo", {}).get("tag", "").strip()
@@ -152,9 +225,9 @@ def webhook():
             print(f"🔖 Tag recebida: '{tag}'")
 
             if tag == "ConsultarPrecoBitcoin":
-                reply = get_bitcoin_price()
+                reply = await get_bitcoin_price_async()
             elif tag == "ConsultarTopCriptos":
-                reply = get_top_cryptos()
+                reply = await get_top_cryptos_async()
             elif tag == "ExplicarCriptomoeda":
                 reply = explain_crypto()
             elif tag == "BoasVindas":
@@ -163,7 +236,7 @@ def webhook():
                 reply = "Desculpe, não entendi sua pergunta."
 
             # ✅ Retorna para o Dialogflow rapidamente
-            threading.Thread(target=send_message, args=(sender, reply)).start()
+            asyncio.create_task(send_message_async(sender, reply))
             return jsonify({"status": "success"}), 200
 
         else:
@@ -174,9 +247,9 @@ def webhook():
             print(f"🔖 Tag recebida (direto): '{tag}'")
 
             if tag == "ConsultarPrecoBitcoin":
-                reply = get_bitcoin_price()
+                reply = await get_bitcoin_price_async()
             elif tag == "ConsultarTopCriptos":
-                reply = get_top_cryptos()
+                reply = await get_top_cryptos_async()
             elif tag == "ExplicarCriptomoeda":
                 reply = explain_crypto()
             elif tag == "BoasVindas":
