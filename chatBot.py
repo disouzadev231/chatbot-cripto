@@ -182,13 +182,10 @@ def webhook():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 def process_request(msg, sender):
-    """
-    Processa a mensagem recebida e executa a lógica correspondente.
-    """
     try:
         if sender:
             result = detect_intent_text(msg)
-            tag = result.fulfillment_info.tag.strip() if hasattr(result, "fulfillment_info") else None
+            tag = getattr(result.fulfillment_info, "tag", "").strip()
         else:
             tag = msg.strip()
 
@@ -210,6 +207,7 @@ def process_request(msg, sender):
 
     except Exception as e:
         print("❌ Erro ao processar a solicitação:", e)
+
 
 # ------------------- RAIZ ----------------------------
 
