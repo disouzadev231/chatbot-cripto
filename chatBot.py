@@ -181,8 +181,11 @@ def process_request(msg, sender):
     Processa a mensagem recebida e executa a lógica correspondente.
     """
     try:
+        # Detecta a intenção usando o Dialogflow CX
         result = detect_intent_text(msg)
-        tag = result.fulfillment_info.tag.strip()
+
+        # Corrige o acesso ao campo fulfillmentInfo
+        tag = result.fulfillment_info.tag.strip() if hasattr(result, "fulfillment_info") else None
 
         print(f"🔖 Tag processada: '{tag}'")
 
