@@ -27,7 +27,7 @@ print(f"🔐 Conta de serviço ativa: {creds.service_account_email}")
 
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
-TWILIO_WHATSAPP_NUMBER = "whatsapp:+14155238886"  # Este é o número do Twilio, não o do cliente
+TWILIO_WHATSAPP_NUMBER = "whatsapp:+14155238886"
 
 # ------------------- DIALOGFLOW CX -------------------
 
@@ -160,12 +160,20 @@ def webhook():
             tag = data.get("fulfillmentInfo", {}).get("tag", "").strip()
             print(f"🔖 Tag recebida (direto): '{tag}'")
 
-            # Processa a tag recebida diretamente do Dialogflow
-            threading.Thread(target=process_request, args=(tag, None)).start()
+            if tag == "ConsultarPrecoBitcoin":
+                reply = get_bitcoin_price()
+            elif tag == "ConsultarTopCriptos":
+                reply = get_top_cryptos()
+            elif tag == "ExplicarCriptomoeda":
+                reply = explain_crypto()
+            elif tag == "BoasVindas":
+                reply = welcome_message()
+            else:
+                reply = "Desculpe, não entendi sua pergunta."
 
             return jsonify({
                 "fulfillment_response": {
-                    "messages": [{"text": {"text": ["Processando sua solicitação..."]}}]
+                    "messages": [{"text": {"text": [reply]}}]
                 }
             }), 200
 
@@ -173,18 +181,15 @@ def webhook():
         print("❌ Erro:", e)
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
 def process_request(msg, sender):
     """
     Processa a mensagem recebida e executa a lógica correspondente.
     """
     try:
-        # Se for mensagem do usuário (WhatsApp), detectar intenção
         if sender:
             result = detect_intent_text(msg)
             tag = result.fulfillment_info.tag.strip() if hasattr(result, "fulfillment_info") else None
         else:
-            # Se for chamada do Dialogflow, a msg já é a tag
             tag = msg.strip()
 
         print(f"🔖 Tag processada: '{tag}'")
