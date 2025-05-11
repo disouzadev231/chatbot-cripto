@@ -65,7 +65,7 @@ def detect_intent_text(
     )
 
     response = client.detect_intent(request=request)
-    return response.query_result
+    return response
 
 # ------------------- FUNÇÕES AUXILIARES -------------------
 
@@ -98,7 +98,7 @@ def get_top_cryptos():
             name = coin["name"]
             symbol = coin["symbol"].upper()
             price = f"R$ {coin['current_price']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            reply_lines.append(f"{i}️⃣ {name} ({symbol}) - {price}")
+            reply_lines.append(f"{i}⃣ {name} ({symbol}) - {price}")
 
         return "\n".join(reply_lines)
     except Exception as e:
@@ -189,12 +189,11 @@ def webhook():
         print("❌ Erro:", e)
         return jsonify({"status": "error", "message": str(e)}), 500
 
-
 def process_request(msg, sender):
     try:
         if sender:
-            result = detect_intent_text(msg)
-            tag = getattr(result.fulfillment_info, "tag", "").strip()
+            response = detect_intent_text(msg)
+            tag = response.query_result.fulfillment_info.tag.strip()
         else:
             tag = msg.strip()
 
@@ -217,7 +216,6 @@ def process_request(msg, sender):
 
     except Exception as e:
         print("❌ Erro ao processar a solicitação:", e)
-
 
 # ------------------- RAIZ ----------------------------
 
