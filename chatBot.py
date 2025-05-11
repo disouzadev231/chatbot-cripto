@@ -182,9 +182,7 @@ def process_request(msg, sender):
     """
     try:
         result = detect_intent_text(msg)
-        result_json = dialogflowcx.DetectIntentResponse.to_json(result._pb)
-        result_dict = json.loads(result_json)
-        tag = result_dict.get("queryResult", {}).get("fulfillmentInfo", {}).get("tag", "").strip()
+        tag = result.fulfillment_info.tag.strip()
 
         print(f"🔖 Tag processada: '{tag}'")
 
