@@ -129,8 +129,16 @@ def send_message(to, message):
         "Body": message
     }
 
-    response = requests.post(url, data=payload, auth=auth)
-    print("📤 Enviado para Twilio:", response.status_code, response.text)
+    try:
+        response = requests.post(url, data=payload, auth=auth)
+        print("📤 Enviado para Twilio:", response.status_code, response.text)
+
+        if response.status_code != 201:
+            print("❌ Erro ao enviar mensagem via Twilio:", response.status_code, response.text)
+        else:
+            print("✅ Mensagem enviada com sucesso via Twilio!")
+    except Exception as e:
+        print("❌ Exceção ao tentar enviar mensagem via Twilio:", str(e))
 
 # ------------------- WEBHOOK -------------------------
 
@@ -201,6 +209,9 @@ def process_request(msg, sender):
             reply = welcome_message()
         else:
             reply = "Desculpe, não entendi sua pergunta."
+            print(f"📤 Enviando mensagem para {sender}: {reply}")
+            send_message(sender, reply)
+
 
         if sender:
             send_message(sender, reply)
