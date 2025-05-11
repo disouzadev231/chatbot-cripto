@@ -152,7 +152,7 @@ def webhook():
             msg = data.get("Body")
             sender = data.get("From")
 
-            # Processa a mensagem do usuário (WhatsApp)
+            # Processa a mensagem do usuário (WhatsApp) em um thread separado
             threading.Thread(target=process_request, args=(msg, sender)).start()
 
             return jsonify({
@@ -189,6 +189,7 @@ def webhook():
         print("❌ Erro:", e)
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
 def process_request(msg, sender):
     try:
         if sender:
@@ -209,12 +210,10 @@ def process_request(msg, sender):
             reply = welcome_message()
         else:
             reply = "Desculpe, não entendi sua pergunta."
-            print(f"📤 Enviando mensagem para {sender}: {reply}")
-            send_message(sender, reply)
 
-
-        if sender:
-            send_message(sender, reply)
+        # Envia a resposta para o WhatsApp
+        print(f"📤 Enviando mensagem para {sender}: {reply}")
+        send_message(sender, reply)
 
     except Exception as e:
         print("❌ Erro ao processar a solicitação:", e)
