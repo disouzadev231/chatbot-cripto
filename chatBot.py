@@ -16,6 +16,11 @@ key_base64 = os.environ.get("GOOGLE_CREDENTIALS_BASE64")
 key_path = "keyfile.json"
 
 if key_base64:
+    # Corrige o padding da string Base64, se necessário
+    missing_padding = len(key_base64) % 4
+    if missing_padding:
+        key_base64 += "=" * (4 - missing_padding)
+
     with open(key_path, "wb") as f:
         f.write(base64.b64decode(key_base64))
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_path
@@ -134,7 +139,6 @@ def send_message(to, message):
 
 # ------------------- WEBHOOK -------------------------
 
-
 @app.route("/webhook", methods=["POST"])
 def webhook():
     try:
@@ -145,9 +149,10 @@ def webhook():
             msg = data.get("Body")
             sender = data.get("From")
 
-            # Processa a mensagem do usuário (WhatsApp)
+            # Processa a mensagem em segundo plano
             threading.Thread(target=process_request, args=(msg, sender)).start()
 
+            # Resposta rápida ao Dialogflow
             return jsonify({
                 "fulfillment_response": {
                     "messages": [{"text": {"text": ["Processando sua solicitação..."]}}]
@@ -156,14 +161,15 @@ def webhook():
 
         else:
             data = request.get_json()
-            print("📩 Requisição recebida do Dialogflow:", json.dumps(data, indent=2, ensure_ascii=False))
+            print("📩 Requisição recebida do Dialogflow:", json.dumps(data, indent=2))
 
             tag = data.get("fulfillmentInfo", {}).get("tag", "").strip()
             print(f"🔖 Tag recebida (direto): '{tag}'")
 
-            # Processa a tag recebida diretamente do Dialogflow
+            # Processa a mensagem em segundo plano
             threading.Thread(target=process_request, args=(tag, None)).start()
 
+            # Resposta rápida ao Dialogflow
             return jsonify({
                 "fulfillment_response": {
                     "messages": [{"text": {"text": ["Processando sua solicitação..."]}}]
@@ -180,13 +186,8 @@ def process_request(msg, sender):
     Processa a mensagem recebida e executa a lógica correspondente.
     """
     try:
-        # Se for mensagem do usuário (WhatsApp), detectar intenção
-        if sender:
-            result = detect_intent_text(msg)
-            tag = result.fulfillment_info.tag.strip() if hasattr(result, "fulfillment_info") else None
-        else:
-            # Se for chamada do Dialogflow, a msg já é a tag
-            tag = msg.strip()
+        result = detect_intent_text(msg)
+        tag = result.fulfillment_info.tag.strip()
 
         print(f"🔖 Tag processada: '{tag}'")
 
@@ -201,6 +202,7 @@ def process_request(msg, sender):
         else:
             reply = "Desculpe, não entendi sua pergunta."
 
+        # Envia a mensagem para o Twilio, se o remetente for fornecido
         if sender:
             send_message(sender, reply)
 
