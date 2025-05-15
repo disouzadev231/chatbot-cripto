@@ -2,11 +2,14 @@ from flask import Flask, request, jsonify
 from google.cloud import dialogflowcx_v3beta1 as dialogflowcx
 from google.api_core.client_options import ClientOptions
 from google.auth import default
+from dotenv import load_dotenv
 import os
 import base64
 import requests
 import json
 import threading
+
+load_dotenv()  # Carrega variáveis do .env
 
 app = Flask(__name__)
 
@@ -140,7 +143,7 @@ def send_message(to, message):
     except Exception as e:
         print("❌ Exceção ao tentar enviar mensagem via Twilio:", str(e))
 
-# ------------------- WEBHOOK Teste2-------------------------
+# ------------------- WEBHOOK -------------------------
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
