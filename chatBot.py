@@ -140,7 +140,7 @@ def send_message(to, message):
     except Exception as e:
         print("❌ Exceção ao tentar enviar mensagem via Twilio:", str(e))
 
-# ------------------- WEBHOOK -------------------------
+# ------------------- WEBHOOK Teste-------------------------
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
