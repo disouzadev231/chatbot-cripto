@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from google.cloud import dialogflowcx_v3beta1 as dialogflowcx
 from google.api_core.client_options import ClientOptions
 from google.auth import default
@@ -8,6 +8,7 @@ import base64
 import requests
 import json
 import threading
+from twilio.twiml.messaging_response import MessagingResponse
 
 load_dotenv()  # Carrega variáveis do .env
 
@@ -148,6 +149,7 @@ def send_message(to, message):
 @app.route("/webhook", methods=["POST"])
 def webhook():
     try:
+        # Se for mensagem do WhatsApp (Twilio) - via form data
         if request.form and request.form.get("Body") and request.form.get("From"):
             data = request.form
             print("📩 Mensagem recebida (WhatsApp):", json.dumps(data.to_dict(), indent=2))
@@ -155,16 +157,35 @@ def webhook():
             msg = data.get("Body")
             sender = data.get("From")
 
-            # Processa a mensagem do usuário (WhatsApp) em um thread separado
-            threading.Thread(target=process_request, args=(msg, sender)).start()
+            # Processa a mensagem no Dialogflow para pegar a tag e resposta
+            response = detect_intent_text(msg)
+            try:
+                tag = response.query_result.fulfillment_info.tag.strip()
+            except Exception:
+                tag = ""
 
-            return jsonify({
-                "fulfillment_response": {
-                    "messages": [{"text": {"text": ["Processando sua solicitação..."]}}]
-                }
-            }), 200
+            print(f"🔖 Tag processada: '{tag}'")
+
+            if tag == "ConsultarPrecoBitcoin":
+                reply = get_bitcoin_price()
+            elif tag == "ConsultarTopCriptos":
+                reply = get_top_cryptos()
+            elif tag == "ExplicarCriptomoeda":
+                reply = explain_crypto()
+            elif tag == "BoasVindas":
+                reply = welcome_message()
+            else:
+                reply = "Desculpe, não entendi sua pergunta."
+
+            print(f"📤 Enviando resposta via Twilio para {sender}: {reply}")
+
+            # Agora, ao invés de thread, responde direto com TwiML para Twilio enviar no WhatsApp
+            twilio_response = MessagingResponse()
+            twilio_response.message(reply)
+            return Response(str(twilio_response), mimetype="application/xml")
 
         else:
+            # Caso seja requisição do Dialogflow fulfillment direto (JSON)
             data = request.get_json()
             print("📩 Requisição recebida do Dialogflow:", json.dumps(data, indent=2, ensure_ascii=False))
 
@@ -192,41 +213,13 @@ def webhook():
         print("❌ Erro:", e)
         return jsonify({"status": "error", "message": str(e)}), 500
 
-def process_request(msg, sender):
-    try:
-        if sender:
-            response = detect_intent_text(msg)
-            tag = response.query_result.fulfillment_info.tag.strip()
-        else:
-            tag = msg.strip()
-
-        print(f"🔖 Tag processada: '{tag}'")
-
-        if tag == "ConsultarPrecoBitcoin":
-            reply = get_bitcoin_price()
-        elif tag == "ConsultarTopCriptos":
-            reply = get_top_cryptos()
-        elif tag == "ExplicarCriptomoeda":
-            reply = explain_crypto()
-        elif tag == "BoasVindas":
-            reply = welcome_message()
-        else:
-            reply = "Desculpe, não entendi sua pergunta."
-
-        # Envia a resposta para o WhatsApp
-        print(f"📤 Enviando mensagem para {sender}: {reply}")
-        send_message(sender, reply)
-
-    except Exception as e:
-        print("❌ Erro ao processar a solicitação:", e)
-
 # ------------------- RAIZ ----------------------------
 
-@app.route("/", methods=["GET"])
+@app.route("/")
 def home():
-    return "Chatbot Cripto ativo!", 200
+    return "ChatCriptoMVP está online! 🚀"
 
-# ------------------- MAIN ----------------------------
+# ------------------- RODA -----------------------------
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, host="0.0.0.0", port=5000)
