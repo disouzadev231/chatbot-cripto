@@ -7,7 +7,6 @@ import os
 import base64
 import requests
 import json
-import threading
 from twilio.twiml.messaging_response import MessagingResponse
 
 load_dotenv()  # Carrega variáveis do .env
@@ -149,7 +148,6 @@ def send_message(to, message):
 @app.route("/webhook", methods=["POST"])
 def webhook():
     try:
-        # Se for mensagem do WhatsApp (Twilio) - via form data
         if request.form and request.form.get("Body") and request.form.get("From"):
             data = request.form
             print("📩 Mensagem recebida (WhatsApp):", json.dumps(data.to_dict(), indent=2))
@@ -161,8 +159,10 @@ def webhook():
             response = detect_intent_text(msg)
             try:
                 tag = response.query_result.fulfillment_info.tag.strip()
+                if not tag:
+                    tag = response.query_result.intent.display_name.strip()
             except Exception:
-                tag = ""
+                tag = response.query_result.intent.display_name.strip()
 
             print(f"🔖 Tag processada: '{tag}'")
 
@@ -179,17 +179,18 @@ def webhook():
 
             print(f"📤 Enviando resposta via Twilio para {sender}: {reply}")
 
-            # Agora, ao invés de thread, responde direto com TwiML para Twilio enviar no WhatsApp
             twilio_response = MessagingResponse()
             twilio_response.message(reply)
             return Response(str(twilio_response), mimetype="application/xml")
 
         else:
-            # Caso seja requisição do Dialogflow fulfillment direto (JSON)
             data = request.get_json()
             print("📩 Requisição recebida do Dialogflow:", json.dumps(data, indent=2, ensure_ascii=False))
 
             tag = data.get("fulfillmentInfo", {}).get("tag", "").strip()
+            if not tag:
+                tag = data.get("intentInfo", {}).get("displayName", "").strip()
+
             print(f"🔖 Tag recebida (direto): '{tag}'")
 
             if tag == "ConsultarPrecoBitcoin":
