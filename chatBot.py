@@ -7,7 +7,6 @@ import os
 import base64
 import requests
 import json
-from twilio.twiml.messaging_response import MessagingResponse
 
 load_dotenv()  # Carrega variáveis do .env
 
@@ -120,7 +119,7 @@ def welcome_message():
         "Você pode me perguntar sobre o preço do Bitcoin, criptos em destaque ou o que é blockchain!"
     )
 
-# ------------------- ENVIO TWILIO --------------------
+# ------------------- ENVIO TWILIO (Corrigido) -------------------
 
 def send_message(to, message):
     url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json"
@@ -134,12 +133,12 @@ def send_message(to, message):
 
     try:
         response = requests.post(url, data=payload, auth=auth)
-        print("📤 Enviado para Twilio:", response.status_code, response.text)
+        print(f"📤 Enviado para Twilio: {response.status_code} {response.text}")
 
-        if response.status_code != 201:
-            print("❌ Erro ao enviar mensagem via Twilio:", response.status_code, response.text)
+        if response.status_code not in [200, 201]:
+            print(f"❌ Erro ao enviar mensagem via Twilio: {response.status_code} - {response.text}")
         else:
-            print("✅ Mensagem enviada com sucesso via Twilio!")
+            print(f"✅ Twilio respondeu com status {response.status_code}: {response.text}")
     except Exception as e:
         print("❌ Exceção ao tentar enviar mensagem via Twilio:", str(e))
 
@@ -179,9 +178,8 @@ def webhook():
 
             print(f"📤 Enviando resposta via Twilio para {sender}: {reply}")
 
-            twilio_response = MessagingResponse()
-            twilio_response.message(reply)
-            return Response(str(twilio_response), mimetype="application/xml")
+            send_message(sender, reply)
+            return Response("✅ Mensagem enviada com sucesso", status=200)
 
         else:
             data = request.get_json()
